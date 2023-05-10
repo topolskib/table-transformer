@@ -140,9 +140,11 @@ def get_data(args):
         dataset_val = torch.utils.data.ConcatDataset(val_datasets)
 
         if args.distributed:
+            print("Distributed samplers")
             sampler_train = torch.utils.data.DistributedSampler(dataset_train)
             sampler_val = torch.utils.data.DistributedSampler(dataset_val, shuffle=False)
         else:
+            print("Non-distributed samplers")
             sampler_train = torch.utils.data.RandomSampler(dataset_train)
             sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
