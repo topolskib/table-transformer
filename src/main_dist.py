@@ -70,6 +70,10 @@ def get_args():
     parser.add_argument('--eval_pool_size', type=int, default=1)
     parser.add_argument('--eval_step', type=int, default=1)
 
+    # distributed training parameters
+    parser.add_argument('--world_size', default=1, type=int,
+                        help='number of distributed processes')
+    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
     return parser.parse_args()
 
 
@@ -135,8 +139,12 @@ def get_data(args):
         dataset_train = torch.utils.data.ConcatDataset(train_datasets)
         dataset_val = torch.utils.data.ConcatDataset(val_datasets)
 
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        if args.distributed:
+            sampler_train = torch.utils.data.DistributedSampler(dataset_train)
+            sampler_val = torch.utils.data.DistributedSampler(dataset_val, shuffle=False)
+        else:
+            sampler_train = torch.utils.data.RandomSampler(dataset_train)
+            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
         batch_sampler_train = torch.utils.data.BatchSampler(sampler_train,
                                                             args.batch_size,
@@ -220,9 +228,14 @@ def train(args, model, criterion, postprocessors, device):
     print("loading data")
     dataloading_time = datetime.now()
     data_loader_train, data_loader_val, dataset_val, train_len = get_data(args)
+    sampler_train = data_loader_train.sampler
     print("finished loading data in :", datetime.now() - dataloading_time)
 
     model_without_ddp = model
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model_without_ddp = model.module
+
     param_dicts = [
         {
             "params": [
@@ -306,7 +319,8 @@ def train(args, model, criterion, postprocessors, device):
     start_time = datetime.now()
     for epoch in range(args.start_epoch, args.epochs):
         print('-' * 100)
-
+        if args.distributed:
+            sampler_train.set_epoch(epoch)
         epoch_timing = datetime.now()
         train_stats = train_one_epoch(
             model,
@@ -356,6 +370,8 @@ def main():
     args = type('Args', (object,), config_args)
     print(args.__dict__)
     print('-' * 100)
+
+    utils.init_distributed_mode(args)
 
     # Check for debug mode
     if args.mode == 'eval' and args.debug:
