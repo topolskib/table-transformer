@@ -138,7 +138,7 @@ def get_data(args):
             train_datasets.append(dataset_train_partial)
             val_datasets.append(dataset_val_partial)
         dataset_train = torch.utils.data.ConcatDataset(train_datasets)
-        dataset_val = torch.utils.data.ConcatDataset(val_datasets)
+        dataset_val = val_datasets[0]  # hack for coco format
 
         if args.distributed:
             print("Distributed samplers")
