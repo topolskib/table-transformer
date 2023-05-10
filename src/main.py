@@ -104,36 +104,28 @@ def get_data(args):
     # Datasets
     print("loading data")
     class_map = get_class_map(args.data_type)
+
     if args.mode == "train":
-        train_datasets = []
-        val_datasets = []
-        if not isinstance(args.data_root_dir, list):
-            args.data_root_dir = [args.data_root_dir]
-        for data_root in args.data_root_dir:
-            dataset_train_partial = PDFTablesDataset(
-                os.path.join(data_root, "train"),
-                get_transform(args.data_type, "train"),
-                do_crop=False,
-                max_size=args.train_max_size,
-                include_eval=False,
-                max_neg=0,
-                make_coco=False,
-                image_extension=".jpg",
-                xml_fileset="train_filelist.txt",
-                class_map=class_map)
-            dataset_val_partial = PDFTablesDataset(os.path.join(data_root, "val"),
-                                           get_transform(args.data_type, "val"),
-                                           do_crop=False,
-                                           max_size=args.val_max_size,
-                                           include_eval=False,
-                                           make_coco=True,
-                                           image_extension=".jpg",
-                                           xml_fileset="val_filelist.txt",
-                                           class_map=class_map)
-            train_datasets.append(dataset_train_partial)
-            val_datasets.append(dataset_val_partial)
-        dataset_train = torch.utils.data.ConcatDataset(train_datasets)
-        dataset_val = torch.utils.data.ConcatDataset(val_datasets)
+        dataset_train = PDFTablesDataset(
+            os.path.join(args.data_root_dir, "train"),
+            get_transform(args.data_type, "train"),
+            do_crop=False,
+            max_size=args.train_max_size,
+            include_eval=False,
+            max_neg=0,
+            make_coco=False,
+            image_extension=".jpg",
+            xml_fileset="train_filelist.txt",
+            class_map=class_map)
+        dataset_val = PDFTablesDataset(os.path.join(args.data_root_dir, "val"),
+                                       get_transform(args.data_type, "val"),
+                                       do_crop=False,
+                                       max_size=args.val_max_size,
+                                       include_eval=False,
+                                       make_coco=True,
+                                       image_extension=".jpg",
+                                       xml_fileset="val_filelist.txt",
+                                       class_map=class_map)
 
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
