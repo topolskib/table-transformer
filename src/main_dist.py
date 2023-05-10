@@ -230,9 +230,7 @@ def train(args, model, criterion, postprocessors, device):
     print("loading data")
     dataloading_time = datetime.now()
     data_loader_train, data_loader_val, dataset_val, train_len = get_data(args)
-    sampler_train = data_loader_train.sampler
-    print(sampler_train)
-    print(data_loader_train.batch_sampler.sampler)
+    sampler_train = data_loader_train.batch_sampler.sampler
     print("finished loading data in :", datetime.now() - dataloading_time)
 
     model_without_ddp = model
