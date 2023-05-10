@@ -69,6 +69,7 @@ def get_args():
     parser.add_argument('--test_max_size', type=int)
     parser.add_argument('--eval_pool_size', type=int, default=1)
     parser.add_argument('--eval_step', type=int, default=1)
+    parser.add_argument('--fp16', action='store_true', default=False)
 
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
@@ -333,7 +334,9 @@ def train(args, model, criterion, postprocessors, device):
             epoch,
             args.clip_max_norm,
             max_batches_per_epoch=max_batches_per_epoch,
-            print_freq=1000)
+            print_freq=1000,
+            use_half_precision=args.fp16
+        )
         print("Epoch completed in ", datetime.now() - epoch_timing)
 
         lr_scheduler.step()

@@ -8,6 +8,7 @@ import sys
 from typing import Iterable
 
 import torch
+from torch.cuda.amp import GradScaler, autocast
 
 import util.misc as utils
 from datasets.coco_eval import CocoEvaluator
@@ -17,14 +18,18 @@ from datasets.panoptic_eval import PanopticEvaluator
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0,
-                    max_batches_per_epoch: int = None, print_freq=100):
+                    max_batches_per_epoch: int = None, print_freq=100, use_half_precision=False):
     model.train()
     criterion.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    
+
+    if use_half_precision:
+        scaler = GradScaler()
+    else:
+        scaler = None
     batch_count = 0
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
         batch_count += 1
@@ -32,9 +37,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             break
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
-        outputs = model(samples)
-        loss_dict = criterion(outputs, targets)
+        with autocast(enabled=use_half_precision):
+            outputs = model(samples)
+            loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
@@ -54,10 +59,19 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             sys.exit(1)
 
         optimizer.zero_grad()
-        losses.backward()
+        if use_half_precision:
+            scaler.scale(losses).backward()
+            scaler.unscale_(optimizer)
+        else:
+            losses.backward()
         if max_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
-        optimizer.step()
+
+        if use_half_precision:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
 
         metric_logger.update(loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
