@@ -10,6 +10,7 @@ import sys
 import random
 import numpy as np
 import torch
+from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torch.utils.data import DataLoader
 
 sys.path.append("../detr")
@@ -213,12 +214,14 @@ def get_model(args, device):
         print("loading model from checkpoint")
         loaded_state_dict = torch.load(args.model_load_path,
                                        map_location=device)
+        consume_prefix_in_state_dict_if_present(loaded_state_dict, "module.")
         model_state_dict = model.state_dict()
         pretrained_dict = {
             k: v
             for k, v in loaded_state_dict.items()
             if k in model_state_dict and model_state_dict[k].shape == v.shape
         }
+        print(f"Loaded {len(pretrained_dict)} parameters from checkpoint!")
         model_state_dict.update(pretrained_dict)
         model.load_state_dict(model_state_dict, strict=True)
     return model, criterion, postprocessors
@@ -352,16 +355,20 @@ def train(args, model, criterion, postprocessors, device):
                      pubmed_stats['coco_eval_bbox'][0],
                      pubmed_stats['coco_eval_bbox'][8]))
 
+        if args.distributed:
+            model_state_dict = model.module.state_dict()
+        else:
+            model_state_dict = model.state_dict()
         # Save current model training progress
         torch.save({'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
+                    'model_state_dict': model_state_dict,
                     'optimizer_state_dict': optimizer.state_dict(),
                     }, model_save_path)
 
         # Save checkpoint for evaluation
         if (epoch+1) % args.checkpoint_freq == 0:
             model_save_path_epoch = os.path.join(output_directory, 'model_' + str(epoch+1) + '.pth')
-            torch.save(model.state_dict(), model_save_path_epoch)
+            torch.save(model_state_dict, model_save_path_epoch)
 
     print('Total training time: ', datetime.now() - start_time)
 
